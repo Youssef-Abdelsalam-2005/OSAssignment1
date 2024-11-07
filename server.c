@@ -74,6 +74,12 @@ typedef struct request{
     struct request * next;
 } Request;
 
+typedef struct {
+    int socket;
+    Request* requests;
+    Rule* rules;
+    Query* queries;
+} ThreadArgs;
 
 bool isValidIPNumber(int num) {
     return (num >= 0 && num <= 255);
@@ -651,14 +657,61 @@ void InteractiveMode()
     free(queries);
 }
 
+void* handle_client(void* arg) {
+    ThreadArgs* args = (ThreadArgs*)arg;
+    int new_socket = args->socket;
+    char buffer[1024] = {0};
+    char response[1024] = {0};
 
+    while(1) {
+        // Clear buffers
+        memset(buffer, 0, sizeof(buffer));
+        memset(response, 0, sizeof(response));
+        
+        // Read client message
+        int valread = read(new_socket, buffer, 1024);
+        if (valread <= 0) {
+            //printf("Client disconnected\n");
+            break;
+        }
+
+        // Remove newline character if present
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        // Check for quit command
+        if (strcmp(buffer, "Q") == 0) {
+            //printf("Client requested to quit\n");
+            break;
+        }
+
+        // Capture stdout to send response back to client
+        FILE *temp = tmpfile();
+        FILE *old_stdout = stdout;
+        stdout = temp;
+
+        // Handle the command
+        HandleRequest(buffer, args->requests, args->rules, args->queries);
+
+        // Restore stdout and get the response
+        fflush(stdout);
+        stdout = old_stdout;
+        rewind(temp);
+        fread(response, sizeof(char), sizeof(response)-1, temp);
+        fclose(temp);
+
+        // Send response back to client
+        send(new_socket, response, strlen(response), 0);
+    }
+
+    close(new_socket);
+    free(arg);
+    return NULL;
+}
 
 void ServerMode(int port) {
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
-    char buffer[1024] = {0};
-    char response[1024] = {0};
     Request* requests = malloc(sizeof(Request));
     Rule* rules = malloc(sizeof(Rule));
     Query* queries = malloc(sizeof(Query));
@@ -703,48 +756,22 @@ void ServerMode(int port) {
 
         //printf("New client connected\n");
 
-        while(1) {
-            // Clear buffers
-            memset(buffer, 0, sizeof(buffer));
-            memset(response, 0, sizeof(response));
-            
-            // Read client message
-            int valread = read(new_socket, buffer, 1024);
-            if (valread <= 0) {
-                //printf("Client disconnected\n");
-                break;
-            }
+        // Create thread arguments
+        ThreadArgs* args = malloc(sizeof(ThreadArgs));
+        args->socket = new_socket;
+        args->requests = requests;
+        args->rules = rules;
+        args->queries = queries;
 
-            // Remove newline character if present
-            buffer[strcspn(buffer, "\n")] = 0;
-
-            // Check for quit command
-            if (strcmp(buffer, "Q") == 0) {
-                //printf("Client requested to quit\n");
-                break;
-            }
-
-            // Capture stdout to send response back to client
-            // You might want to modify HandleRequest to return a string instead
-            FILE *temp = tmpfile();
-            FILE *old_stdout = stdout;
-            stdout = temp;
-
-            // Handle the command
-            HandleRequest(buffer, requests, rules, queries);
-
-            // Restore stdout and get the response
-            fflush(stdout);
-            stdout = old_stdout;
-            rewind(temp);
-            fread(response, sizeof(char), sizeof(response)-1, temp);
-            fclose(temp);
-
-            // Send response back to client
-            send(new_socket, response, strlen(response), 0);
+        // Create a new thread for the client
+        pthread_t thread_id;
+        if (pthread_create(&thread_id, NULL, handle_client, (void*)args) != 0) {
+            //perror("Failed to create thread");
+            free(args);
+            close(new_socket);
+        } else {
+            pthread_detach(thread_id);
         }
-
-        close(new_socket);
     }
 
     // Clean up
