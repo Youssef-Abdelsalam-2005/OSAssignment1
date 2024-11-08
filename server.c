@@ -188,7 +188,7 @@ PortRange parsePortRange(const char* port_str) {
         strcpy(end_port, dash + 1);
 
         int start_int = strtoul(start_port, &endptr, 10);
-        int end_int = strtoul(start_port, &endptr, 10);
+        int end_int = strtoul(end_port, &endptr, 10);
 
         if (start_int < 1 || start_int > 65535 || end_int < 1 || end_int > 65535){
             range.isRange = -1;
