@@ -87,10 +87,25 @@ bool isValidIPNumber(int num) {
 
 
 bool isValidIPAddress(const char* ip_str) {
+    // Count the number of dots in the string
+    int dotCount = 0;
+    for (const char* p = ip_str; *p; p++) {
+        if (*p == '.') {
+            dotCount++;
+        }
+    }
+
+    // We need exactly 3 dots for a valid IP address with 4 numbers
+    if (dotCount != 3) {
+        return false;
+    }
+
     int num1, num2, num3, num4;
+    // Now we can safely use sscanf to extract the numbers
     if (sscanf(ip_str, "%d.%d.%d.%d", &num1, &num2, &num3, &num4) != 4) {
         return false;
     }
+
     return isValidIPNumber(num1) && isValidIPNumber(num2) && 
            isValidIPNumber(num3) && isValidIPNumber(num4);
 }
@@ -136,6 +151,7 @@ IPRange parseIPRange(const char* ip_str, bool* isValid) {
         start_ip[len] = '\0';
         strcpy(end_ip, dash + 1);
         
+        
         if (!isValidIPAddress(start_ip) || !isValidIPAddress(end_ip)) {
             *isValid = false;
             return range;
@@ -160,6 +176,7 @@ IPRange parseIPRange(const char* ip_str, bool* isValid) {
 PortRange parsePortRange(const char* port_str) {
     PortRange range;
     char* dash = strchr(port_str, '-');
+    char* endptr;
     
     if (dash) {
 
@@ -169,13 +186,26 @@ PortRange parsePortRange(const char* port_str) {
         strncpy(start_port, port_str, len);
         start_port[len] = '\0';
         strcpy(end_port, dash + 1);
-        
-        range.start = (unsigned short)atoi(start_port);
-        range.end = (unsigned short)atoi(end_port);
+
+        int start_int = strtoul(start_port, &endptr, 10);
+        int end_int = strtoul(start_port, &endptr, 10);
+
+        if (start_int < 1 || start_int > 65535 || end_int < 1 || end_int > 65535){
+            range.isRange = -1;
+            return range;
+        }
+        range.start = (unsigned short)start_int;
+        range.end = (unsigned short)end_int;
         range.isRange = 1;
     } else {
+        int port_int = strtoul(port_str, &endptr, 10);
 
-        range.start = (unsigned short)atoi(port_str);
+        if (port_int < 1 || port_int > 65535){
+            range.isRange = -1;
+            return range;
+        }
+
+        range.start = (unsigned short)port_int;
         range.end = range.start;
         range.isRange = 0;
     }
@@ -220,7 +250,7 @@ void PrintRequests(Request* head) {
     //printf("Listing all requests\n");
     Request* current = head;
     while (current != NULL) {
-        printf("%s", current->command);
+        printf("%s\n", current->command);
         current = current->next;
     }
 }
@@ -325,7 +355,7 @@ void AddRule(char command[], Rule* head)
 
     new_rule->portRange = parsePortRange(port_str);
     
-    if (new_rule->portRange.start > 65535 || new_rule->portRange.end > 65535) {
+    if (new_rule->portRange.isRange == -1 || new_rule->portRange.start > 65535 || new_rule->portRange.end > 65535) {
         printf("Invalid rule\n");
         free(new_rule);
         current->next = NULL;
@@ -485,7 +515,7 @@ Rule* parseRule(const char* ruleStr, bool* isValid) {
     port_str[i] = '\0';
     
     rule->portRange = parsePortRange(port_str);
-    if (rule->portRange.start > 65535 || rule->portRange.end > 65535) {
+    if (rule->portRange.isRange == -1 || rule->portRange.start > 65535 || rule->portRange.end > 65535) {
         //printf("Invalid port: %s\n", port_str);
         *isValid = false;
         free(rule);
