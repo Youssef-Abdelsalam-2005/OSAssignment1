@@ -24,12 +24,10 @@ CmdArg ParseCmdLine(int argc, char ** argv, CmdArg* cmd) {
         } else {
             cmd->port = atoi(argv[1]);
             if (cmd->port <= 0 || cmd->port > 65535) {
-                //fprintf(stderr, "Invalid port number\n");
                 exit(1);
             }
         }
     } else {
-        //fprintf(stderr, "Usage: %s -i\n       %s <port>\n", argv[0], argv[0]);
         exit(1);
     }
 
@@ -56,7 +54,7 @@ typedef struct {
 typedef struct query {
     IPAddress ipAddress;
     unsigned short port;
-    struct rule* matchedRule;  // Add this field
+    struct rule* matchedRule;
     struct query* next;
 } Query;
 
@@ -87,7 +85,6 @@ bool isValidIPNumber(int num) {
 
 
 bool isValidIPAddress(const char* ip_str) {
-    // Count the number of dots in the string
     int dotCount = 0;
     for (const char* p = ip_str; *p; p++) {
         if (*p == '.') {
@@ -95,13 +92,11 @@ bool isValidIPAddress(const char* ip_str) {
         }
     }
 
-    // We need exactly 3 dots for a valid IP address with 4 numbers
     if (dotCount != 3) {
         return false;
     }
 
     int num1, num2, num3, num4;
-    // Now we can safely use sscanf to extract the numbers
     if (sscanf(ip_str, "%d.%d.%d.%d", &num1, &num2, &num3, &num4) != 4) {
         return false;
     }
@@ -229,7 +224,7 @@ void AddQuery(Rule* rule, IPAddress ipAddress, unsigned short port) {
     if (newQuery != NULL) {
         newQuery->ipAddress = ipAddress;
         newQuery->port = port;
-        newQuery->matchedRule = rule;  // Set the matched rule
+        newQuery->matchedRule = rule;
         newQuery->next = rule->queries;
         rule->queries = newQuery;
     }
@@ -239,15 +234,14 @@ bool queryExists(Query* head, IPAddress ipAddress, unsigned short port) {
     Query* current = head;
     while (current != NULL) {
         if (memcmp(&current->ipAddress, &ipAddress, sizeof(IPAddress)) == 0 && current->port == port) {
-            return true; // Query already exists
+            return true;
         }
         current = current->next;
     }
-    return false; // Query does not exist
+    return false;
 }
 
 void PrintRequests(Request* head) {
-    //printf("Listing all requests\n");
     Request* current = head;
     while (current != NULL) {
         printf("%s\n", current->command);
@@ -258,13 +252,11 @@ void PrintRequests(Request* head) {
 void PrintRules(Rule* head) {
     Rule* current = head;
     
-    // Skip the dummy head node
     if (current != NULL) {
         current = current->next;
     }
 
     while (current != NULL) {
-        // Print the rule
         printf("Rule: ");
         
         printf("%d.%d.%d.%d", 
@@ -287,7 +279,6 @@ void PrintRules(Rule* head) {
         }
         printf("\n");
         
-        // Print associated queries for this rule
         Query* queryCurrent = current->queries;
         while (queryCurrent != NULL) {
             printf("Query: %d.%d.%d.%d %d\n",
@@ -299,7 +290,6 @@ void PrintRules(Rule* head) {
             queryCurrent = queryCurrent->next;
         }
         
-        //printf("\n"); // Add an extra newline between rules
         current = current->next;
     }
 }
@@ -336,7 +326,7 @@ void AddRule(char command[], Rule* head)
 
     current->next = malloc(sizeof(Rule));
     if (current->next == NULL) {
-        //printf("Memory allocation failed\n");
+
         return;
     }
 
@@ -385,14 +375,8 @@ bool areIPRangesEqual(IPRange range1, IPRange range2) {
 }
 
 bool arePortRangesEqual(PortRange range1, PortRange range2) {
-    //printf("Comparing port ranges:\n");
-    //printf("Range1: %d", range1.start);
     if (range1.isRange) printf("-%d", range1.end);
-    //printf("\n");
-    
-    //printf("Range2: %d", range2.start);
     if (range2.isRange) printf("-%d", range2.end);
-    //printf("\n");
     
     return range1.start == range2.start &&
            range1.end == range2.end &&
@@ -400,18 +384,12 @@ bool arePortRangesEqual(PortRange range1, PortRange range2) {
 }
 
 bool areRulesEqual(Rule* rule1, Rule* rule2) {
-
-
-    // For deletion, we only care about matching IP and port, not the action
     if (!areIPRangesEqual(rule1->ipRange, rule2->ipRange)) {
-        //printf("IP ranges don't match\n");
         return false;
     }
     if (!arePortRangesEqual(rule1->portRange, rule2->portRange)) {
-        //printf("Port ranges don't match\n");
         return false;
     }
-    //printf("Rules match\n");
     return true;
 }
 
@@ -424,7 +402,6 @@ void deleteQueriesForRule(Query* queryHead, Rule* rule) {
         
         if (current->matchedRule == rule) {
             if (prev == NULL) {
-                // Handle case where query is at head
                 queryHead = next;
             } else {
                 prev->next = next;
@@ -441,17 +418,14 @@ void deleteQueriesForRule(Query* queryHead, Rule* rule) {
 bool deleteRule(Rule* head, Rule* ruleToDelete, Query* queryHead) {
     if (head == NULL || head->next == NULL) return false;
 
-    Rule* current = head->next;  // Start from the first real rule
+    Rule* current = head->next;
     Rule* prev = head;
     
     while (current != NULL) {
 
         if (areRulesEqual(current, ruleToDelete)) {
-            //printf("Rule match found\n");
-            // Delete associated queries first
             deleteQueriesForRule(queryHead, current);
             
-            // Delete the rule
             prev->next = current->next;
             free(current);
             return true;
@@ -459,34 +433,27 @@ bool deleteRule(Rule* head, Rule* ruleToDelete, Query* queryHead) {
         prev = current;
         current = current->next;
     }
-    //printf("No matching rule found\n");
     return false;
 }
 
 Rule* parseRule(const char* ruleStr, bool* isValid) {
-    //printf("Parsing rule string: '%s'\n", ruleStr);
     
     Rule* rule = malloc(sizeof(Rule));
     *isValid = true;
     
-    // Skip leading whitespace
     while (*ruleStr && isspace(*ruleStr)) ruleStr++;
     
-    // Check action
     if (*ruleStr != 'A' && *ruleStr != 'D') {
-        //printf("Invalid action: %c\n", *ruleStr);
         *isValid = false;
         free(rule);
         return NULL;
     }
     
     rule->isAllow = (*ruleStr == 'A');
-    ruleStr++; // Move past action
+    ruleStr++;
     
-    // Skip whitespace
     while (*ruleStr && isspace(*ruleStr)) ruleStr++;
     
-    // Find IP address
     char ip_str[256] = {0};
     int i = 0;
     while (*ruleStr && !isspace(*ruleStr) && i < 255) {
@@ -497,16 +464,13 @@ Rule* parseRule(const char* ruleStr, bool* isValid) {
     bool isValidIP = true;
     rule->ipRange = parseIPRange(ip_str, &isValidIP);
     if (!isValidIP) {
-        //printf("Invalid IP: %s\n", ip_str);
         *isValid = false;
         free(rule);
         return NULL;
     }
     
-    // Skip whitespace
     while (*ruleStr && isspace(*ruleStr)) ruleStr++;
     
-    // Parse port
     char port_str[256] = {0};
     i = 0;
     while (*ruleStr && !isspace(*ruleStr) && i < 255) {
@@ -516,14 +480,12 @@ Rule* parseRule(const char* ruleStr, bool* isValid) {
     
     rule->portRange = parsePortRange(port_str);
     if (rule->portRange.isRange == -1 || rule->portRange.start > 65535 || rule->portRange.end > 65535) {
-        //printf("Invalid port: %s\n", port_str);
         *isValid = false;
         free(rule);
         return NULL;
     }
     
     rule->next = NULL;
-    //printf("Successfully parsed rule\n");
     return rule;
 }
 
@@ -534,7 +496,6 @@ Rule* isConnectionAllowed(Rule* rules, IPAddress ip, unsigned short port) {
     Rule* firstAllowRule = NULL;
     bool denyFound = false;
 
-    // Skip dummy head node if it exists
     if (current != NULL) {
         current = current->next;
     }
@@ -542,19 +503,14 @@ Rule* isConnectionAllowed(Rule* rules, IPAddress ip, unsigned short port) {
     while (current != NULL) {
         if (isIPInRange(ip, current->ipRange) && isPortInRange(port, current->portRange)) {
             if (current->isAllow) {
-                // If this is the first matching allow rule, save it
                 if (firstAllowRule == NULL) {
                     firstAllowRule = current;
                 }
-
-                // Check if the query already exists
                 if (!queryExists(current->queries, ip, port)) {
-                    // If it doesn't exist, add the new query
                     AddQuery(current, ip, port);
                     return firstAllowRule;
                 }
             } else {
-                // If we find a deny rule that matches, immediately reject
                 denyFound = true;
                 return NULL;
                 
@@ -563,48 +519,38 @@ Rule* isConnectionAllowed(Rule* rules, IPAddress ip, unsigned short port) {
         current = current->next;
     }
 
-    // If a deny rule was found, return NULL
     if (denyFound) {
         return NULL;
     }
 
-    // Return the first matching allow rule (or NULL if none found)
     return NULL;
 }
 
 void HandleRequest(char command[], Request* requests, Rule* rules, Query* queries)
 {
-    // Add the command to the request list
     AddRequest(requests, command);
 
-    // Handle different command types
     if (command[0] == 'R') {
         PrintRequests(requests);
     }
     else if (command[0] == 'A') {
-        // Add a new rule
         AddRule(command, rules);
     }
     else if (command[0] == 'C' && command[1] == ' ') {
-        // Handle connection request
         char ip_str[16];
         unsigned short port;
 
-        // Parse the command for IP and port
         if (sscanf(command + 2, "%15s %hu", ip_str, &port) != 2) {
             printf("Illegal IP address or port specified\n");
             return;
         }
 
-        // Convert the IP string to an IPAddress struct
         IPAddress ip = parseIPAddress(ip_str);
 
-        // Validate the IP address and port
         if (isValidIPAddress(ip_str) && port <= 65535) {
             Rule* matchedRule = isConnectionAllowed(rules, ip, port);
             if (matchedRule != NULL) {
                 printf("Connection accepted\n");
-                // Add the query to the matched rule
             } else {
                 printf("Connection rejected\n");
                 
@@ -614,11 +560,7 @@ void HandleRequest(char command[], Request* requests, Rule* rules, Query* querie
         }
     }
     else if (command[0] == 'D' && command[1] == ' ') {
-        // Handle delete rule command
-        //printf("Processing delete command: '%s'\n", command);
-
         bool isValid = true;
-        // Prepend 'D ' to the rule string for parsing
         char fullCommand[256];
         snprintf(fullCommand, sizeof(fullCommand), "D %s", command + 2);
         Rule* ruleToDelete = parseRule(fullCommand, &isValid);
@@ -638,12 +580,9 @@ void HandleRequest(char command[], Request* requests, Rule* rules, Query* querie
         return;
     }
     else if (command[0] == 'L') {
-        // List all rules and queries
-        //printf("Listing all rules\n");
         PrintRules(rules);
     }
     else {
-        // Handle invalid commands
         printf("Illegal request\n");
     }
 }
@@ -665,11 +604,9 @@ void InteractiveMode()
         fgets_result = fgets(command, sizeof(command), stdin);
         
         if (fgets_result == NULL) {
-            // End of input
             break;
         }
 
-        // Remove newline character if present
         command[strcspn(command, "\n")] = 0;
 
         if (command[0] == 'Q') {
@@ -694,42 +631,33 @@ void* handle_client(void* arg) {
     char response[1024] = {0};
 
     while(1) {
-        // Clear buffers
+
         memset(buffer, 0, sizeof(buffer));
         memset(response, 0, sizeof(response));
         
-        // Read client message
         int valread = read(new_socket, buffer, 1024);
         if (valread <= 0) {
-            //printf("Client disconnected\n");
             break;
         }
 
-        // Remove newline character if present
         buffer[strcspn(buffer, "\n")] = 0;
 
-        // Check for quit command
         if (strcmp(buffer, "Q") == 0) {
-            //printf("Client requested to quit\n");
             break;
         }
 
-        // Capture stdout to send response back to client
         FILE *temp = tmpfile();
         FILE *old_stdout = stdout;
         stdout = temp;
 
-        // Handle the command
         HandleRequest(buffer, args->requests, args->rules, args->queries);
 
-        // Restore stdout and get the response
         fflush(stdout);
         stdout = old_stdout;
         rewind(temp);
         fread(response, sizeof(char), sizeof(response)-1, temp);
         fclose(temp);
 
-        // Send response back to client
         send(new_socket, response, strlen(response), 0);
     }
 
@@ -746,16 +674,12 @@ void ServerMode(int port) {
     Rule* rules = malloc(sizeof(Rule));
     Query* queries = malloc(sizeof(Query));
 
-    // Create socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        //perror("Socket creation failed");
         exit(EXIT_FAILURE);
     }
 
-    // Set socket options
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        //perror("setsockopt failed");
         exit(EXIT_FAILURE);
     }
 
@@ -763,40 +687,29 @@ void ServerMode(int port) {
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
 
-    // Bind socket
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        //perror("Bind failed");
         exit(EXIT_FAILURE);
     }
 
-    // Listen for connections
+
     if (listen(server_fd, 3) < 0) {
-        //perror("Listen failed");
         exit(EXIT_FAILURE);
     }
 
-    //printf("Server listening on port %d...\n", port);
 
     while(1) {
-        // Accept connection
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-            //perror("Accept failed");
             continue;
         }
 
-        //printf("New client connected\n");
-
-        // Create thread arguments
         ThreadArgs* args = malloc(sizeof(ThreadArgs));
         args->socket = new_socket;
         args->requests = requests;
         args->rules = rules;
         args->queries = queries;
 
-        // Create a new thread for the client
         pthread_t thread_id;
         if (pthread_create(&thread_id, NULL, handle_client, (void*)args) != 0) {
-            //perror("Failed to create thread");
             free(args);
             close(new_socket);
         } else {
@@ -804,7 +717,6 @@ void ServerMode(int port) {
         }
     }
 
-    // Clean up
     close(server_fd);
     free(requests);
     free(rules);
@@ -819,12 +731,10 @@ int main (int argc, char ** argv) {
     cmd = ParseCmdLine(argc, argv, &cmd);
     if (cmd.isInteractive)
     {
-        //printf("Interactive mode\n");
         InteractiveMode();
     }
     else
     {
-        //printf("Server Mode\n");
         ServerMode(cmd.port);
     }
 

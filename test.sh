@@ -140,7 +140,7 @@ function test_invalid_inputs() {
 function test_rule_operations() {
     echo "Running rule operations test"
     
-    echo -en "Adding rule: \t"
+    echo -en "Adding rule"
     result=$($client $IPADDRESS $PORT "A 192.168.1.1 80")
     if [[ "$result" == *"Rule added"* ]]; then
         echo "OK"
@@ -205,6 +205,79 @@ function test_connection_checking() {
     return 0
 }
 
+function test_ip_range_rules() {
+    echo "Running IP range rules test"
+    
+    $client $IPADDRESS $PORT "A 192.168.1.0-192.168.1.255 80" > /dev/null
+    
+    echo -en "Testing connection within range: \t"
+    result=$($client $IPADDRESS $PORT "C 192.168.1.50 80")
+    if [[ "$result" == *"Connection accepted"* ]]; then
+        echo "OK"
+    else
+        echo "FAILED (Got: $result)"
+        return 1
+    fi
+    
+    echo -en "Testing connection outside range: \t"
+    result=$($client $IPADDRESS $PORT "C 192.168.2.50 80")
+    if [[ "$result" == *"Connection rejected"* ]]; then
+        echo "OK"
+    else
+        echo "FAILED (Got: $result)"
+        return 1
+    fi
+    
+    return 0
+}
+
+function test_port_range_rules() {
+    echo "Running port range rules test"
+    
+    $client $IPADDRESS $PORT "A 192.168.1.0-192.168.1.255 80-90" > /dev/null
+    
+    echo -en "Testing connection within port range: \t"
+    result=$($client $IPADDRESS $PORT "C 192.168.1.50 85")
+    if [[ "$result" == *"Connection accepted"* ]]; then
+        echo "OK"
+    else
+        echo "FAILED (Got: $result)"
+        return 1
+    fi
+    
+    echo -en "Testing connection outside port range: \t"
+    result=$($client $IPADDRESS $PORT "C 192.168.1.50 91")
+    if [[ "$result" == *"Connection rejected"* ]]; then
+        echo "OK"
+    else
+        echo "FAILED (Got: $result)"
+        return 1
+    fi
+    
+    return 0
+}
+
+function test_concurrent_connections() {
+    echo "Running concurrent connections test"
+    
+    for i in {1..5}; do
+        $client $IPADDRESS $PORT "A 192.168.1.$i 80" > /dev/null &
+    done
+    
+    echo -en "Testing multiple connections: \t"
+    for i in {1..5}; do
+        result=$($client $IPADDRESS $PORT "C 192.168.1.$i 80")
+        if [[ "$result" == *"Connection accepted"* ]]; then
+            echo "Connection for 192.168.1.$i accepted"
+        else
+            echo "FAILED for 192.168.1.$i (Got: $result)"
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
 # --- execution ---
 start_server || exit 1
 
@@ -213,6 +286,9 @@ run basic_testcase
 run test_invalid_inputs
 run test_rule_operations
 run test_connection_checking
+run test_ip_range_rules
+run test_port_range_rules
+run test_concurrent_connections
 
 stop_server
 
